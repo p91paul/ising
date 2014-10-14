@@ -26,16 +26,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 using namespace std;
 using namespace boost::random;
 
-#define N 10000
+#define N 10000000
 #define L 32
 #define L3 L*L*L
 #define J 1
 #define B 0
-#define T 16.0
 
 class Configuration {
 public:
-    Configuration(int seed = time(0)){
+    Configuration(double T, int seed = time(0)):T(T){
         gen.seed(seed);
         for (int i = 0; i < L; i++)
         for (int j = 0; j < L; j++)
@@ -69,6 +68,7 @@ private:
     mt19937 gen;
     uniform_int_distribution<> spindist = uniform_int_distribution<>(0, 1);
     uniform_real_distribution<> pdist = uniform_real_distribution<>(0, 1);
+    const double T;
 
     inline int randomSpin(){
         return 2*spindist(gen)-1;
@@ -84,9 +84,14 @@ private:
     }
 };
 
-int main()
+int main(int argc, char** argv)
 {
-    Configuration S;
+    double T;
+    if (argc < 2)
+        T = 0;
+    else
+        T = atoi(argv[1]);
+    Configuration S(T, 5);
     double sum = 0;
     for (int i = 0; i<N; i++){
         S.generateNext();
