@@ -26,7 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 using namespace std;
 using namespace boost::random;
 
-#define N 10000000
+#define N 1000000
 #define L 32
 #define L3 L*L*L
 #define J 1
