@@ -1,0 +1,128 @@
+#include <curand_kernel.h>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_int_distribution.hpp>
+#include <ctime>
+#include <iostream>
+
+using namespace std;
+using namespace boost::random;
+
+static const int L = 2;
+static const int L3 = L * L * L;
+static const int N = 1000000;
+static const double B = 0;
+
+/**
+ * This macro checks return value of the CUDA runtime call and exits
+ * the application if the call failed.
+ */
+#define CUDA_CHECK_RETURN(value) {											\
+	cudaError_t _m_cudaStat = value;										\
+	if (_m_cudaStat != cudaSuccess) {										\
+		cerr << "Error " << cudaGetErrorString(_m_cudaStat) << " at line "	\
+				<< __LINE__ << " in file " << __FILE__ << endl;			\
+		exit(1);															\
+	}																		\
+}
+
+__device__ unsigned int getTid() {
+	// Determine thread ID
+	unsigned int tidx = blockIdx.x * blockDim.x + threadIdx.x;
+	unsigned int tidy = blockIdx.y * blockDim.y + threadIdx.y;
+	unsigned int tidz = blockIdx.z * blockDim.z + threadIdx.z;
+	return tidx * L * L + tidy * L + tidz;
+}
+
+__device__ float rand(curandState * const rngStates) {
+	return curand_uniform(&rngStates[getTid()]);
+}
+
+__device__ void tryInvert(int*** S, unsigned int x, unsigned int y,
+		unsigned int z, float beta, curandState * const rngStates) {
+	if (x < L && y < L && z < L) {
+		int neigh = S[x][y][(z + 1) % L] + S[x][y][(z + L - 1) % L]
+				+ S[x][(y + 1) % L][z] + S[x][(y + L - 1) % L][z]
+				+ S[(x + 1) % L][y][z] + S[(x + L - 1) % L][y][z];
+		int dE = -2 * S[x][y][z] * neigh;
+		if (dE < 0 || rand(rngStates) < __expf(-beta * dE))
+			S[x][y][z] *= -1;
+	}
+}
+
+__global__ void initRNG(curandState * const rngStates,
+		const unsigned int seed) {
+	unsigned int tid = getTid();
+	if (tid < L3)
+		curand_init(seed, tid, 0, &rngStates[tid]);
+}
+
+__global__ void generateNext(cudaPitchedPtr Sptr, float beta,
+		curandState * const rngStates) {
+	int*** S = (int ***)Sptr.ptr;
+	unsigned int x = threadIdx.x;
+	unsigned int y = threadIdx.y;
+	unsigned int z = 2 * threadIdx.z + (x % 2) ^ (y % 2);
+	tryInvert(S, x, y, z, beta, rngStates);
+	tryInvert(S, x, y, z+1, beta, rngStates);
+}
+
+class Configuration {
+public:
+	Configuration(float T, int seed = time(0)) :
+			T(T) {
+		gen.seed(seed);
+		for (int i = 0; i < L; i++)
+			for (int j = 0; j < L; j++)
+				for (int k = 0; k < L; k++) {
+					matrix[i][j][k] = randomSpin();
+				}
+		beta = 1/T;
+		spindist = uniform_int_distribution<>(0, 1);
+	}
+	int matrix[L][L][L];
+	float beta;
+private:
+	mt19937 gen;
+	uniform_int_distribution<> spindist;
+	const float T;
+
+	inline int randomSpin() {
+		return 2 * spindist(gen) - 1;
+	}
+};
+
+/**
+ * Host function that prepares data array and passes it to the CUDA kernel.
+ */
+int main(int argc, char** argv) {
+	double T;
+	if (argc < 2)
+		T = 0;
+	else
+		T = atoi(argv[1]);
+	Configuration S(T, 5);
+
+	curandState *rngStates;
+	CUDA_CHECK_RETURN(cudaMalloc(&rngStates, L3 * sizeof(curandState)));
+
+	cudaPitchedPtr ptr;
+	cudaExtent extent = make_cudaExtent(L * sizeof(int), L, L);
+	CUDA_CHECK_RETURN(cudaMalloc3D(&ptr, extent));
+
+	cudaMemcpy3DParms copyParams = { 0 };
+	copyParams.srcPtr = make_cudaPitchedPtr(S.matrix, L * sizeof(int), L, L);
+	copyParams.dstPtr = ptr;
+	copyParams.extent = extent;
+	copyParams.kind = cudaMemcpyHostToDevice;
+	CUDA_CHECK_RETURN(cudaMemcpy3D(&copyParams));
+
+	initRNG<<<1, L3>>>(rngStates, 5);
+	generateNext<<<1, L3>>>(ptr, S.beta, rngStates);
+
+	CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
+	CUDA_CHECK_RETURN(cudaGetLastError());
+
+	CUDA_CHECK_RETURN(cudaFree(rngStates));
+	CUDA_CHECK_RETURN(cudaFree(ptr.ptr));
+	CUDA_CHECK_RETURN(cudaDeviceReset());
+}

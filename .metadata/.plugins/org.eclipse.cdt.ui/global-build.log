@@ -1,0 +1,114 @@
+16:33:54 **** Incremental Build of configuration Debug for project CUDAIsing ****
+make all 
+Building file: ../ising.cu
+Invoking: NVCC Compiler
+/opt/cuda/bin/nvcc -G -g -O0 -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21  -odir "" -M -o "ising.d" "../ising.cu"
+/opt/cuda/bin/nvcc -G -g -O0 --compile --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21  -x cu -o  "ising.o" "../ising.cu"
+../ising.cu(169): error: identifier "i" is undefined
+
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+1 error detected in the compilation of "/tmp/tmpxft_000012a1_00000000-6_ising.cpp1.ii".
+subdir.mk:18: set di istruzioni per l'obiettivo "ising.o" non riuscito
+make: *** [ising.o] Errore 2
+16:34:12 **** Incremental Build of configuration Debug for project CUDAIsing ****
+make all 
+Building file: ../ising.cu
+Invoking: NVCC Compiler
+/opt/cuda/bin/nvcc -G -g -O0 -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21  -odir "" -M -o "ising.d" "../ising.cu"
+/opt/cuda/bin/nvcc -G -g -O0 --compile --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21  -x cu -o  "ising.o" "../ising.cu"
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+Finished building: ../ising.cu
+ 
+Building target: CUDAIsing
+Invoking: NVCC Linker
+/opt/cuda/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21 -link -o  "CUDAIsing"  ./ising.o   
+Finished building target: CUDAIsing
+ 
+16:35:04 **** Incremental Build of configuration Debug for project CUDAIsing ****
+make all 
+Building file: ../ising.cu
+Invoking: NVCC Compiler
+/opt/cuda/bin/nvcc -G -g -O0 -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21  -odir "" -M -o "ising.d" "../ising.cu"
+/opt/cuda/bin/nvcc -G -g -O0 --compile --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21  -x cu -o  "ising.o" "../ising.cu"
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+Finished building: ../ising.cu
+ 
+Building target: CUDAIsing
+Invoking: NVCC Linker
+/opt/cuda/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21 -link -o  "CUDAIsing"  ./ising.o   
+Finished building target: CUDAIsing
+ 
+16:36:23 **** Incremental Build of configuration Debug for project CUDAIsing ****
+make all 
+Building file: ../ising.cu
+Invoking: NVCC Compiler
+/opt/cuda/bin/nvcc -G -g -O0 -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21  -odir "" -M -o "ising.d" "../ising.cu"
+/opt/cuda/bin/nvcc -G -g -O0 --compile --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21  -x cu -o  "ising.o" "../ising.cu"
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+Finished building: ../ising.cu
+ 
+Building target: CUDAIsing
+Invoking: NVCC Linker
+/opt/cuda/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21 -link -o  "CUDAIsing"  ./ising.o   
+Finished building target: CUDAIsing
+ 
+16:37:12 **** Incremental Build of configuration Debug for project CUDAIsing ****
+make all 
+Building file: ../ising.cu
+Invoking: NVCC Compiler
+/opt/cuda/bin/nvcc -G -g -O0 -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21  -odir "" -M -o "ising.d" "../ising.cu"
+/opt/cuda/bin/nvcc -G -g -O0 --compile --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21  -x cu -o  "ising.o" "../ising.cu"
+../ising.cu(210): error: expression must have pointer type
+
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+1 error detected in the compilation of "/tmp/tmpxft_00001453_00000000-6_ising.cpp1.ii".
+subdir.mk:18: set di istruzioni per l'obiettivo "ising.o" non riuscito
+make: *** [ising.o] Errore 2
+16:37:51 **** Incremental Build of configuration Debug for project CUDAIsing ****
+make all 
+Building file: ../ising.cu
+Invoking: NVCC Compiler
+/opt/cuda/bin/nvcc -G -g -O0 -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21  -odir "" -M -o "ising.d" "../ising.cu"
+/opt/cuda/bin/nvcc -G -g -O0 --compile --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21  -x cu -o  "ising.o" "../ising.cu"
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+Finished building: ../ising.cu
+ 
+Building target: CUDAIsing
+Invoking: NVCC Linker
+/opt/cuda/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21 -link -o  "CUDAIsing"  ./ising.o   
+Finished building target: CUDAIsing
+ 
+16:45:27 **** Incremental Build of configuration Debug for project CUDAIsing ****
+make all 
+Building file: ../ising.cu
+Invoking: NVCC Compiler
+/opt/cuda/bin/nvcc -G -g -O0 -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21  -odir "" -M -o "ising.d" "../ising.cu"
+/opt/cuda/bin/nvcc -G -g -O0 --compile --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21  -x cu -o  "ising.o" "../ising.cu"
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+../ising.cu(15): warning: variable "B" was declared but never referenced
+
+Finished building: ../ising.cu
+ 
+Building target: CUDAIsing
+Invoking: NVCC Linker
+/opt/cuda/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_20,code=compute_20 -gencode arch=compute_20,code=sm_21 -link -o  "CUDAIsing"  ./ising.o   
+Finished building target: CUDAIsing
+ 
+16:45:57 **** Incremental Build of configuration Debug for project CUDAIsing ****
+make all 
+make: Nessuna operazione da eseguire per "all".
