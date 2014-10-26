@@ -3,12 +3,18 @@
 #include <boost/random/uniform_int_distribution.hpp>
 #include <ctime>
 #include <iostream>
+#include <stdio.h>
 
 using namespace std;
 using namespace boost::random;
 
-static const int L = 10;
+static const int SEED = 5;
+
+static const int L = 8;
 static const int L3 = L * L * L;
+static const int BLOCKS_X = 4;
+static const int BLOCK_SIZE = L/BLOCKS_X;
+
 static const int SUM_NUM_BLOCKS = 1;
 static const int SUM_BLOCK_SIZE = (L3+1) / 2;
 static const int N = 5;
@@ -21,7 +27,7 @@ static const double B = 0;
 #define CUDA_CHECK_RETURN(value) {											\
 	cudaError_t _m_cudaStat = value;										\
 	if (_m_cudaStat != cudaSuccess) {										\
-		cerr << "Error " << cudaGetErrorString(_m_cudaStat) << " at line "	\
+		cerr << "Error " << _m_cudaStat << ": " << cudaGetErrorString(_m_cudaStat) << " at line "	\
 				<< __LINE__ << " in file " << __FILE__ << endl;			\
 		exit(1);															\
 	}																		\
@@ -42,6 +48,11 @@ __device__ unsigned int getTid(dim3 index){
 
 __device__ float rand(curandState * const rngStates, unsigned int tid) {
 	return curand_uniform(&rngStates[tid]);
+}
+
+__device__ int randomSpin(curandState * const rngStates, unsigned int tid) {
+    int binary = (int) (rand(rngStates, tid) + 1/2);
+    return 2 * binary - 1;
 }
 
 __device__ void tryInvert(int* S, dim3 index, float beta, curandState * const rngStates) {
@@ -75,11 +86,15 @@ __device__ void tryInvert(int* S, dim3 index, float beta, curandState * const rn
 	}
 }
 
-__global__ void initRNG(curandState * const rngStates,
+__global__ void initRNG(cudaPitchedPtr Sptr, curandState * const rngStates,
 		const unsigned int seed) {
 	unsigned int tid = getTid(getIndex());
-	if (tid < L3)
+	if (tid < L3) {
+	    int* S = (int *)Sptr.ptr;
 		curand_init(seed, tid, 0, &rngStates[tid]);
+	    S[tid] = randomSpin(rngStates, tid);
+	}
+
 }
 
 __global__ void generateNext(cudaPitchedPtr Sptr, float beta,
@@ -117,35 +132,31 @@ __global__ void sum(cudaPitchedPtr Sptr, int* output) {
 	    output[blockIdx.x] = partialSum[0];
 }
 
+__global__ void print(cudaPitchedPtr Sptr){
+    int* S = (int *)Sptr.ptr;
+    for (int i = 0; i < L3; ++i) {
+        printf("%d: %d\n", i, S[i]);
+    }
+}
+
 class Configuration {
 public:
 	Configuration(float T, int seed = time(0)) :
 			T(T) {
-		gen.seed(seed);
-		for (int i = 0; i < L; i++)
-			for (int j = 0; j < L; j++)
-				for (int k = 0; k < L; k++) {
-					matrix[i][j][k] = randomSpin();
-				}
 		beta = 1/T;
-		spindist = uniform_int_distribution<>(0, 1);
-
-		CUDA_CHECK_RETURN(cudaMalloc(&rngStates, L3 * sizeof(curandState)));
 
 		cudaExtent extent = make_cudaExtent(L * sizeof(int), L, L);
 		CUDA_CHECK_RETURN(cudaMalloc3D(&ptr, extent));
 
-		cudaMemcpy3DParms copyParams = { 0 };
-		copyParams.srcPtr = make_cudaPitchedPtr(matrix, L * sizeof(int), L, L);
-		copyParams.dstPtr = ptr;
-		copyParams.extent = extent;
-		copyParams.kind = cudaMemcpyHostToDevice;
-		CUDA_CHECK_RETURN(cudaMemcpy3D(&copyParams));
+		blocks = dim3(BLOCKS_X, BLOCKS_X, BLOCKS_X);
+		threads.x = threads.y = threads.z = BLOCK_SIZE;
 
-		threads.x = threads.y = threads.z = L;
-		initRNG<<<1, threads>>>(rngStates, 5);
+        CUDA_CHECK_RETURN(cudaMalloc(&rngStates, L3 * sizeof(curandState)));
+		initRNG<<<blocks, threads>>>(ptr, rngStates, seed);
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
+        CUDA_CHECK_RETURN(cudaGetLastError());
 
-		 cudaMalloc(&deviceSumPtr, sizeof(int) * SUM_NUM_BLOCKS);
+        CUDA_CHECK_RETURN(cudaMalloc(&deviceSumPtr, sizeof(int) * SUM_NUM_BLOCKS));
 	}
 
 	~Configuration(){
@@ -157,15 +168,21 @@ public:
 	}
 
     void nextConfig(){
-    	threads.z = L/2;
-    	generateNext<<<1, threads>>>(ptr, beta, rngStates);
+    	threads.z = BLOCK_SIZE / 2;
+    	generateNext<<<blocks, threads>>>(ptr, beta, rngStates);
     	CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
+        CUDA_CHECK_RETURN(cudaGetLastError());
     }
 
     double getMagnet(){
+        //print<<<1,1>>>(ptr);
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
+        CUDA_CHECK_RETURN(cudaGetLastError());
         sum<<<SUM_NUM_BLOCKS, SUM_BLOCK_SIZE>>>(ptr, deviceSumPtr);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        cudaMemcpy(hostSumPtr, deviceSumPtr, sizeof(int) * SUM_NUM_BLOCKS, cudaMemcpyDeviceToHost);
+        CUDA_CHECK_RETURN(cudaGetLastError());
+        CUDA_CHECK_RETURN(cudaMemcpy(hostSumPtr, deviceSumPtr, sizeof(int) * SUM_NUM_BLOCKS, cudaMemcpyDeviceToHost));
+        CUDA_CHECK_RETURN(cudaGetLastError());
         double result = 0;
         for (int i = 0; i < SUM_NUM_BLOCKS; ++i) {
             result += hostSumPtr[i];
@@ -181,15 +198,11 @@ private:
 	float beta;
 
     curandState *rngStates;
+    dim3 blocks;
 	dim3 threads;
 	cudaPitchedPtr ptr;
 	int* deviceSumPtr;
 	int hostSumPtr[SUM_NUM_BLOCKS];
-
-
-	inline int randomSpin() {
-		return 2 * spindist(gen) - 1;
-	}
 };
 
 /**
@@ -201,7 +214,7 @@ int main(int argc, char** argv) {
 		T = 0;
 	else
 		T = atoi(argv[1]);
-	Configuration S(T, 5);
+	Configuration S(T, SEED);
 	double sum = 0;
     for (int i = 0; i<N; i++){
         S.nextConfig();
