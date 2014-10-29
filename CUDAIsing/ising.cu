@@ -16,8 +16,7 @@ static const int BLOCKS_X = 4;
 static const int BLOCK_SIZE = L / BLOCKS_X;
 
 static const int SUM_NUM_BLOCKS = 32;
-static const int SUM_BLOCK_SIZE = (L3 / SUM_NUM_BLOCKS + 1) / 2;
-static const int N = 1000000;
+static const int SUM_BLOCK_SIZE = L3 / SUM_NUM_BLOCKS / 2;
 //static const double B = 0;
 
 /**
@@ -36,9 +35,9 @@ static const int N = 1000000;
 
 __device__ dim3 getIndex() {
     dim3 index;
-    index.x = blockIdx.x * blockDim.x + threadIdx.x;
-    index.y = blockIdx.y * blockDim.y + threadIdx.y;
-    index.z = blockIdx.z * blockDim.z + threadIdx.z;
+    index.x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+    index.y = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+    index.z = blockIdx.z * BLOCK_SIZE + threadIdx.z;
     return index;
 }
 
@@ -58,7 +57,7 @@ __device__ int randomSpin(curandState * const rngStates, unsigned int tid) {
 
 __global__ void initRNG(cudaPitchedPtr Sptr, curandState * const rngStates,
         const unsigned int seed) {
-    unsigned int tid = getTid(getIndex());
+    unsigned int tid = blockIdx.x * SUM_BLOCK_SIZE + threadIdx.x;
     if (tid < L3) {
         int* S = (int *) Sptr.ptr;
         curand_init(seed, tid, 0, &rngStates[tid]);
@@ -97,7 +96,7 @@ __device__ void tryInvert(int* S, dim3 index, float beta,
         unsigned int tid = getTid(index);
         int dE = -2 * S[tid] * neigh;
         if (dE < 0 || rand(rngStates, tid) < __expf(-beta * dE))
-            S[getTid(index)] *= -1;
+            S[tid] *= -1;
     }
 }
 
@@ -105,7 +104,7 @@ __global__ void generateNext(cudaPitchedPtr Sptr, float beta,
         curandState * const rngStates) {
     int* S = (int *) Sptr.ptr;
     dim3 index = getIndex();
-    index.z = 2 * index.z + (index.x % 2) ^ (index.y % 2);
+    index.z = 2 * index.z + (index.x & 1) ^ (index.y & 1);
     tryInvert(S, index, beta, rngStates);
     index.z++;
     tryInvert(S, index, beta, rngStates);
@@ -153,7 +152,8 @@ public:
         CUDA_CHECK_RETURN(cudaMalloc3D(&ptr, extent));
 
         blocks = dim3(BLOCKS_X, BLOCKS_X, BLOCKS_X);
-        threads.x = threads.y = threads.z = BLOCK_SIZE;
+        threads.x = threads.y = BLOCK_SIZE;
+        threads.z = BLOCK_SIZE / 2;
 
         CUDA_CHECK_RETURN(cudaMalloc(&rngStates, L3 * sizeof(curandState)));
         initRNG<<<SUM_NUM_BLOCKS, SUM_BLOCK_SIZE>>>(ptr, rngStates, seed);
@@ -173,16 +173,12 @@ public:
     }
 
     void nextConfig() {
-        threads.z = BLOCK_SIZE / 2;
         generateNext<<<blocks, threads>>>(ptr, beta, rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
     }
 
     double getMagnet() {
-        //print<<<1,1>>>(ptr);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
         sum<<<SUM_NUM_BLOCKS, SUM_BLOCK_SIZE>>>(ptr, deviceSumPtr);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
@@ -212,15 +208,13 @@ private:
     int hostSumPtr[SUM_NUM_BLOCKS];
 };
 
-/**
- * Host function that prepares data array and passes it to the CUDA kernel.
- */
 int main(int argc, char** argv) {
-    double T;
-    if (argc < 2)
-        T = 0;
-    else
+    double T = 0;
+    unsigned int N = 2;
+    if (argc >= 2)
         T = atoi(argv[1]);
+    if (argc >= 3)
+        N = atoi(argv[2]);
     Configuration S(T, SEED);
     double sum = 0;
     for (int i = 0; i < N; i++) {
