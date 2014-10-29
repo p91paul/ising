@@ -10,14 +10,14 @@ using namespace boost::random;
 
 static const int SEED = 5;
 
-static const int L = 4;
+static const int L = 32;
 static const int L3 = L * L * L;
-static const int BLOCKS_X = 2;
+static const int BLOCKS_X = 4;
 static const int BLOCK_SIZE = L / BLOCKS_X;
 
-static const int SUM_NUM_BLOCKS = 2;
+static const int SUM_NUM_BLOCKS = 32;
 static const int SUM_BLOCK_SIZE = (L3 / SUM_NUM_BLOCKS + 1) / 2;
-static const int N = 5;
+static const int N = 1000000;
 //static const double B = 0;
 
 /**
@@ -52,8 +52,21 @@ __device__ float rand(curandState * const rngStates, unsigned int tid) {
 }
 
 __device__ int randomSpin(curandState * const rngStates, unsigned int tid) {
-    int binary = (int) (rand(rngStates, tid) + 1 / 2);
+    int binary = (int) (1 - rand(rngStates, tid) + 0.5);
     return 2 * binary - 1;
+}
+
+__global__ void initRNG(cudaPitchedPtr Sptr, curandState * const rngStates,
+        const unsigned int seed) {
+    unsigned int tid = getTid(getIndex());
+    if (tid < L3) {
+        int* S = (int *) Sptr.ptr;
+        curand_init(seed, tid, 0, &rngStates[tid]);
+        skipahead(100, &rngStates[tid]);
+
+        S[tid] = randomSpin(rngStates, tid);
+    }
+
 }
 
 __device__ void tryInvert(int* S, dim3 index, float beta,
@@ -86,17 +99,6 @@ __device__ void tryInvert(int* S, dim3 index, float beta,
         if (dE < 0 || rand(rngStates, tid) < __expf(-beta * dE))
             S[getTid(index)] *= -1;
     }
-}
-
-__global__ void initRNG(cudaPitchedPtr Sptr, curandState * const rngStates,
-        const unsigned int seed) {
-    unsigned int tid = getTid(getIndex());
-    if (tid < L3) {
-        int* S = (int *) Sptr.ptr;
-        curand_init(seed, tid, 0, &rngStates[tid]);
-        S[tid] = randomSpin(rngStates, tid);
-    }
-
 }
 
 __global__ void generateNext(cudaPitchedPtr Sptr, float beta,
