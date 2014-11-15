@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 using namespace std;
 using namespace boost::random;
 
-#define N 1000000
 #define L 32
 #define L3 L*L*L
 #define J 1
@@ -86,12 +85,13 @@ private:
 
 int main(int argc, char** argv)
 {
-    double T;
-    if (argc < 2)
-        T = 0;
-    else
+    double T = 0;
+    int N = 2;
+    if (argc >= 2)
         T = atoi(argv[1]);
-    Configuration S(T, 5);
+    if (argc >= 3)
+        N = atoi(argv[2]);
+    Configuration S(T, time(NULL));
     double sum = 0;
     for (int i = 0; i<N; i++){
         S.generateNext();
