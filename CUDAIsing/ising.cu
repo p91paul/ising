@@ -10,12 +10,15 @@ using namespace boost::random;
 
 static const int SEED = 5;
 
-static const int L = 32;
+static const int L = 24;
 static const int L3 = L * L * L;
-static const int BLOCKS_X = 4;
-static const int BLOCK_SIZE = L / BLOCKS_X;
+static const int BLOCKS_XY = 2;
+static const int BLOCKS_Z = 4;
+static const int BLOCK_SIZE_XY = L/BLOCKS_XY;
+static const int BLOCK_SIZE_Z = L / BLOCKS_Z / 2;
 
-static const int SUM_NUM_BLOCKS = 32;
+
+static const int SUM_NUM_BLOCKS = 24;
 static const int SUM_BLOCK_SIZE = L3 / SUM_NUM_BLOCKS / 2;
 //static const double B = 0;
 
@@ -35,9 +38,9 @@ static const int SUM_BLOCK_SIZE = L3 / SUM_NUM_BLOCKS / 2;
 
 __device__ dim3 getIndex() {
     dim3 index;
-    index.x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-    index.y = blockIdx.y * BLOCK_SIZE + threadIdx.y;
-    index.z = blockIdx.z * BLOCK_SIZE + threadIdx.z;
+    index.x = blockIdx.x * BLOCK_SIZE_XY + threadIdx.x;
+    index.y = blockIdx.y * BLOCK_SIZE_XY + threadIdx.y;
+    index.z = blockIdx.z * BLOCK_SIZE_Z + threadIdx.z;
     //printf("(%d,%d,%d) (%d,%d,%d)\n",blockIdx.x, blockIdx.y, blockIdx.z, threadIdx.x, threadIdx.y, threadIdx.z);
     return index;
 }
@@ -267,8 +270,8 @@ public:
         CUDA_CHECK_RETURN(cudaMalloc3D(&ptrS, extent));
         this->ptrS = (int*) ptrS.ptr;
 
-        blocks = dim3(BLOCKS_X, BLOCKS_X, BLOCKS_X/2);
-        threads = dim3(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+        blocks = dim3(BLOCKS_XY, BLOCKS_XY, BLOCKS_Z);
+        threads = dim3(BLOCK_SIZE_XY, BLOCK_SIZE_XY, BLOCK_SIZE_Z);
 
         //cout<< blocks.x <<blocks.y << blocks.z <<endl;
         //cout << threads.x << threads.y << threads.z <<endl;
@@ -356,7 +359,7 @@ int main(int argc, char** argv) {
         T = atof(argv[1]);
     if (argc >= 3)
         N = atoi(argv[2]);
-    Configuration S(T, time(0));
+    Configuration S(T, SEED);
     double sum = 0;
     for (int i = 0; i < N; i++) {
         S.nextConfig();
