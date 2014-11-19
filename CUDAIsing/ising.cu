@@ -38,6 +38,7 @@ __device__ dim3 getIndex() {
     index.x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
     index.y = blockIdx.y * BLOCK_SIZE + threadIdx.y;
     index.z = blockIdx.z * BLOCK_SIZE + threadIdx.z;
+    //printf("(%d,%d,%d) (%d,%d,%d)\n",blockIdx.x, blockIdx.y, blockIdx.z, threadIdx.x, threadIdx.y, threadIdx.z);
     return index;
 }
 
@@ -49,7 +50,7 @@ __device__ unsigned int getTid(dim3 index) {
 __device__ int randomSpin(curandState * const rngStates, unsigned int tid) {
     int rnd = curand(&rngStates[tid]);
     //printf("%f\n", rnd);
-    int binary = rnd & 1;
+    int binary = (rnd >> (tid & 31)) & 1;
     return 2 * binary - 1;
 }
 
@@ -61,15 +62,11 @@ __global__ void initRNG(curandState * const rngStates,
     }
 }
 
-__global__ void fillMatrix(int* S, int* Jx, int* Jy, int* Jz,
-        curandState * const rngStates) {
+__global__ void fillMatrix(int* S, curandState * const rngStates) {
     unsigned int tid = blockIdx.x * SUM_BLOCK_SIZE + threadIdx.x;
     if (tid < L3) {
         //skipahead(100, &rngStates[tid]);
         S[tid] = randomSpin(rngStates, tid);
-        Jx[tid] = randomSpin(rngStates, tid);
-        Jy[tid] = randomSpin(rngStates, tid);
-        Jz[tid] = randomSpin(rngStates, tid);
     }
 }
 
@@ -84,31 +81,31 @@ template<char dir, int skip> __device__ int neigh(dim3 index) {
     return getTid(result);
 }
 
-__device__ int energy(int* S, int* Jx, int* Jy, int* Jz, dim3 index, int tid) {
-    int prevX = neigh<'x', -1>(index);
-    int prevY = neigh<'y', -1>(index);
-    int prevZ = neigh<'z', -1>(index);
-    int nEnergy = S[neigh<'x', 1>(index)] * Jx[tid] + S[prevX] * Jx[prevX]
-            + S[neigh<'y', 1>(index)] * Jy[tid] + S[prevY] * Jy[prevY]
-            + S[neigh<'z', 1>(index)] * Jz[tid] + S[prevZ] * Jz[prevZ];
+__device__ int energy(int* S, dim3 index, int tid) {
+    int nEnergy = S[neigh<'x', 1>(index)] + S[neigh<'x', -1>(index)] + S[neigh<'y', 1>(index)]
+            + S[neigh<'y', -1>(index)] + S[neigh<'z', 1>(index)] + S[neigh<'z', -1>(index)];
     return -S[tid] * nEnergy;
 }
 
-__device__ void tryInvert(int* S, int* Jx, int* Jy, int* Jz, dim3 index,
-        float beta, curandState * const rngStates) {
+__device__ void tryInvert(int* S, dim3 index, float beta,
+        curandState * const rngStates) {
     if (index.x < L && index.y < L && index.z < L) {
         unsigned int tid = getTid(index);
-        int dE = 2 * energy(S, Jx, Jy, Jz, index, tid);
+        int dE = -2 * energy(S, index, tid);
         if (dE < 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
             S[tid] = -S[tid];
     }
 }
 
-__global__ void generateNext(int* S, int* Jx, int* Jy, int* Jz, float beta,
-        curandState * const rngStates, int offset) {
+template<bool second> __global__ void generateNext(int* S, float beta, curandState * const rngStates) {
     dim3 index = getIndex();
-    index.z = offset + 2 * index.z + (index.x & 1) ^ (index.y & 1);
-    tryInvert(S, Jx, Jy, Jz, index, beta, rngStates);
+    int shifting = (index.x ^ index.y) & 1;
+    //printf("(%d,%d,%d) shifting %d second %d\n",index.x, index.y, index.z, shifting, second);
+    if (second)
+        shifting = 1 - shifting;
+    index.z = (2 * index.z) + shifting;
+    //printf("(%d,%d,%d)\n",index.x, index.y, index.z);
+    tryInvert(S, index, beta, rngStates);
 }
 
 // Utility class used to avoid linker errors with extern
@@ -247,13 +244,13 @@ __global__ void print(int* S) {
             }
 }
 
-__global__ void totalEnergy(int* S, int* Jx, int* Jy, int* Jz) {
+__global__ void totalEnergy(int* S) {
     int e = 0;
     for (int i = 0; i < L; ++i)
         for (int j = 0; j < L; ++j)
             for (int k = 0; k < L; ++k) {
                 dim3 index(i, j, k);
-                e += energy(S, Jx, Jy, Jz, index, getTid(index));
+                e += energy(S, index, getTid(index));
             }
     printf("Total energy= %d\n", e);
 }
@@ -267,21 +264,14 @@ public:
         cudaExtent extent = make_cudaExtent(L * sizeof(int), L, L);
 
         cudaPitchedPtr ptrS;
-        cudaPitchedPtr ptrJx;
-        cudaPitchedPtr ptrJy;
-        cudaPitchedPtr ptrJz;
         CUDA_CHECK_RETURN(cudaMalloc3D(&ptrS, extent));
-        CUDA_CHECK_RETURN(cudaMalloc3D(&ptrJx, extent));
-        CUDA_CHECK_RETURN(cudaMalloc3D(&ptrJy, extent));
-        CUDA_CHECK_RETURN(cudaMalloc3D(&ptrJz, extent));
         this->ptrS = (int*) ptrS.ptr;
-        this->ptrJx = (int*) ptrJx.ptr;
-        this->ptrJy = (int*) ptrJy.ptr;
-        this->ptrJz = (int*) ptrJz.ptr;
 
-        blocks = dim3(BLOCKS_X, BLOCKS_X, BLOCKS_X);
-        threads.x = threads.y = BLOCK_SIZE;
-        threads.z = BLOCK_SIZE / 2;
+        blocks = dim3(BLOCKS_X, BLOCKS_X, BLOCKS_X/2);
+        threads = dim3(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+
+        //cout<< blocks.x <<blocks.y << blocks.z <<endl;
+        //cout << threads.x << threads.y << threads.z <<endl;
 
         CUDA_CHECK_RETURN(cudaMalloc(&rngStates, L3 * sizeof(curandState)));
 
@@ -289,7 +279,7 @@ public:
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
         fillMatrix<<<SUM_NUM_BLOCKS * 2, SUM_BLOCK_SIZE>>>(this->ptrS,
-                this->ptrJx, this->ptrJy, this->ptrJz, rngStates);
+                rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
 
@@ -302,20 +292,15 @@ public:
 
         CUDA_CHECK_RETURN(cudaFree(rngStates));
         CUDA_CHECK_RETURN(cudaFree(ptrS));
-        CUDA_CHECK_RETURN(cudaFree(ptrJx));
-        CUDA_CHECK_RETURN(cudaFree(ptrJy));
-        CUDA_CHECK_RETURN(cudaFree(ptrJz));
         CUDA_CHECK_RETURN(cudaFree(deviceSumPtr));
         CUDA_CHECK_RETURN(cudaDeviceReset());
     }
 
     void nextConfig() {
-        generateNext<<<blocks, threads>>>(ptrS, ptrJx, ptrJy, ptrJz, beta,
-                rngStates, 0);
+        generateNext<false><<<blocks, threads>>>(ptrS, beta, rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
-        generateNext<<<blocks, threads>>>(ptrS, ptrJx, ptrJy, ptrJz, beta,
-                rngStates, 1);
+        generateNext<true><<<blocks, threads>>>(ptrS, beta, rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
     }
@@ -345,7 +330,7 @@ public:
 
     void printEnergy(int i) {
         cout << "iteration " << i << ": ";
-        totalEnergy<<<1, 1>>>(ptrS, ptrJx, ptrJy, ptrJz);
+        totalEnergy<<<1, 1>>>(ptrS);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
     }
@@ -354,36 +339,32 @@ private:
     mt19937 gen;
     uniform_int_distribution<> distrib;
     const float T;
-    int matrix[L][L][L];
     float beta;
 
     curandState *rngStates;
     dim3 blocks;
     dim3 threads;
     int* ptrS;
-    int* ptrJx;
-    int* ptrJy;
-    int* ptrJz;
     int* deviceSumPtr;
     int hostSumPtr[SUM_NUM_BLOCKS];
 };
 
 int main(int argc, char** argv) {
-    double T = 0;
-    unsigned int N = 82;
+    double T = 0.1;
+    unsigned int N = 10;
     if (argc >= 2)
-        T = atoi(argv[1]);
+        T = atof(argv[1]);
     if (argc >= 3)
         N = atoi(argv[2]);
-    Configuration S(T, SEED);
+    Configuration S(T, time(0));
     double sum = 0;
     for (int i = 0; i < N; i++) {
         S.nextConfig();
         //S.printMatrix(i);
         double magnet = S.getMagnet();
         sum += magnet;
-        S.printEnergy(i);
-        cout << magnet << endl;
+        //S.printEnergy(i);
+        //cout << magnet << endl;
     }
     cout << sum / N << endl;
 }
