@@ -52,6 +52,7 @@ template<bool second> __global__ void generateNext(int* S, float beta, curandSta
     tryInvert(S, index, beta, rngStates);
 }
 
+//compile all needed variants of template function
 template __global__ void generateNext<true>(int* S, float beta, curandState * const rngStates);
 template __global__ void generateNext<false>(int* S, float beta, curandState * const rngStates);
 
