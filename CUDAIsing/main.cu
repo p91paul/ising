@@ -4,6 +4,7 @@
 using namespace std;
 //static const double B = 0;
 
+#include <sys/time.h>
 #include "common.h"
 #include "sum.h"
 #include "random.h"
@@ -110,13 +111,25 @@ int main(int argc, char** argv) {
         N = atoi(argv[2]);
     Configuration S(T, SEED);
     double sum = 0;
+    struct timeval t1, t2;
+    double nextTime = 0, sumTime = 0;
     for (int i = 0; i < N; i++) {
+        gettimeofday(&t1, NULL);
         S.nextConfig();
+        gettimeofday(&t2, NULL);
+        nextTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
+        nextTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
         //S.printMatrix(i);
+        gettimeofday(&t1, NULL);
         double magnet = S.getMagnet();
+        gettimeofday(&t2, NULL);
+        sumTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
+        sumTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
         sum += magnet;
         //S.printEnergy(i);
         //cout << magnet << endl;
     }
     cout << sum / N << endl;
+    cout << "Time for S.nextConfig(): " << nextTime << endl;
+    cout << "Time for S.getMagnet(): " << sumTime << endl;
 }
