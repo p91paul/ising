@@ -1,3 +1,4 @@
+#include "stdio.h"
 #include "common.h"
 #include "random.h"
 
@@ -10,52 +11,78 @@ __device__ dim3 getIndex() {
     return index;
 }
 
+template<int offsetX = L * L, int offsetY = L>
 __device__ unsigned int getTid(dim3 index) {
-    return index.x * L * L + index.y * L + index.z;
+    return index.x * offsetX + index.y * offsetY + index.z;
 }
 
-template<char dir, int skip> __device__ int neigh(dim3 index) {
-    dim3 result = index;
+static const int sharedXY = (BLOCK_SIZE_XY + 2);
+static const int sharedZ = (BLOCK_SIZE_Z * 2 + 2);
+static const int offsetX = sharedXY * sharedZ;
+static const int offsetY = sharedZ;
+static const int sharedSize = sharedXY * sharedXY * sharedZ;
+static const int pos000 = sharedXY * sharedZ + sharedZ + 1;
+
+template<char dir, int skip, int size = sharedSize, int sizeXY = sharedXY,
+        int sizeZ = sharedZ>
+__device__ int neigh(int tid) {
     if (dir == 'x')
-        result.x = (result.x + skip) % L;
+        return (size + tid + skip * sizeXY * sizeZ) % size;
     if (dir == 'y')
-        result.y = (result.y + skip) % L;
+        return (size + tid + skip * sizeZ) % size;
     if (dir == 'z')
-        result.z = (result.z + skip) % L;
-    return getTid(result);
+        return (size + tid + skip) % size;
 }
 
-__device__ int energy(int* S, dim3 index, int tid) {
-    int nEnergy = S[neigh<'x', 1>(index)] + S[neigh<'x', -1>(index)] + S[neigh<'y', 1>(index)]
-            + S[neigh<'y', -1>(index)] + S[neigh<'z', 1>(index)] + S[neigh<'z', -1>(index)];
-    return -S[tid] * nEnergy;
-}
-
-__device__ void tryInvert(int* S, dim3 index, float beta,
+template<bool second> __global__ void generateNext(int* S, float beta,
         curandState * const rngStates) {
-    if (index.x < L && index.y < L && index.z < L) {
-        unsigned int tid = getTid(index);
-        int dE = -2 * energy(S, index, tid);
-        if (dE < 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
-            S[tid] = -S[tid];
-    }
-}
 
-template<bool second> __global__ void generateNext(int* S, float beta, curandState * const rngStates) {
     dim3 index = getIndex();
+    //shifting to do inversions with the pattern of squares colours on a chess board
     int shifting = (index.x ^ index.y) & 1;
-    //printf("(%d,%d,%d) shifting %d second %d\n",index.x, index.y, index.z, shifting, second);
     if (second)
         shifting = 1 - shifting;
-    index.z = (2 * index.z) + shifting;
+
+    index.z = (index.z << 1);
+    int tid = getTid(index);
+
+    //double z coordinate
+    int sTid = getTid<offsetX, offsetY>(threadIdx) + pos000 + threadIdx.z;
+
+    __shared__ int sS[sharedSize];
+    sS[sTid + (1 - shifting)] = S[tid + (1 - shifting)];
+    sTid += shifting;
+    tid += shifting;
+    if (threadIdx.x == 0)
+        sS[neigh<'x', -1>(sTid)] = S[neigh<'x', -1, L3, L, L>(tid)];
+    if (threadIdx.y == 0)
+        sS[neigh<'y', -1>(sTid)] = S[neigh<'y', -1, L3, L, L>(tid)];
+    if (!shifting && threadIdx.z == 0)
+        sS[neigh<'z', -1>(sTid)] = S[neigh<'z', -1, L3, L, L>(tid)];
+    if (threadIdx.x == BLOCK_SIZE_XY - 1)
+        sS[neigh<'x', +1>(sTid)] = S[neigh<'x', +1, L3, L, L>(tid)];
+    if (threadIdx.y == BLOCK_SIZE_XY - 1)
+        sS[neigh<'y', +1>(sTid)] = S[neigh<'y', +1, L3, L, L>(tid)];
+    if (shifting && threadIdx.z == BLOCK_SIZE_Z - 1)
+        sS[neigh<'z', +1>(sTid)] = S[neigh<'z', +1, L3, L, L>(tid)];
+    __syncthreads();
+
     //printf("(%d,%d,%d)\n",index.x, index.y, index.z);
-    tryInvert(S, index, beta, rngStates);
+    //printf("%d\n", sTid + sharedXY * sharedZ);
+    int nEnergy = sS[sTid + 1] + sS[sTid - 1] + sS[sTid + sharedZ]
+            + sS[sTid - sharedZ] + sS[sTid + sharedXY * sharedZ]
+            + sS[sTid - sharedXY * sharedZ];
+    int cellS = S[tid];
+    int dE = 2 * cellS * nEnergy;
+    if (dE < 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
+        S[tid] = -cellS;
 }
 
 //compile all needed variants of template function
-template __global__ void generateNext<true>(int* S, float beta, curandState * const rngStates);
-template __global__ void generateNext<false>(int* S, float beta, curandState * const rngStates);
-
+template __global__ void generateNext<true>(int* S, float beta,
+        curandState * const rngStates);
+template __global__ void generateNext<false>(int* S, float beta,
+        curandState * const rngStates);
 
 #include <stdio.h>
 
@@ -68,13 +95,22 @@ __global__ void print(int* S) {
             }
 }
 
+__device__ int energy(int* S, int tid) {
+    int nEnergy = S[neigh<'x', 1, L3, L, L>(tid)]
+            + S[neigh<'x', -1, L3, L, L>(tid)] + S[neigh<'y', 1, L3, L, L>(tid)]
+            + S[neigh<'y', -1, L3, L, L>(tid)] + S[neigh<'z', 1, L3, L, L>(tid)]
+            + S[neigh<'z', -1, L3, L, L>(tid)];
+    return -S[tid] * nEnergy;
+
+}
+
 __global__ void totalEnergy(int* S) {
     int e = 0;
     for (int i = 0; i < L; ++i)
         for (int j = 0; j < L; ++j)
             for (int k = 0; k < L; ++k) {
                 dim3 index(i, j, k);
-                e += energy(S, index, getTid(index));
+                e += energy(S, getTid(index));
             }
     printf("Total energy= %d\n", e);
 }
