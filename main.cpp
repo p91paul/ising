@@ -48,7 +48,7 @@ public:
         for (int j = 0; j < L; j++)
         for (int k = 0; k < L; k++){
             int dE = -2 * S[i][j][k] * neigh(i,j,k);
-            if (dE < 0 || pdist(gen) < exp(-beta*dE))
+            if (dE <= 0 || pdist(gen) < exp(-beta*dE))
                 S[i][j][k] *= -1;
         }
     }

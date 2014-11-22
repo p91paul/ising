@@ -74,7 +74,7 @@ template<bool second> __global__ void generateNext(int* S, float beta,
             + sS[sTid - sharedXY * sharedZ];
     int cellS = S[tid];
     int dE = 2 * cellS * nEnergy;
-    if (dE < 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
+    if (dE <= 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
         S[tid] = -cellS;
 }
 
