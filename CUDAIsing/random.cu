@@ -5,13 +5,13 @@
 __device__ int randomSpin(curandState * const rngStates, unsigned int tid) {
     int rnd = curand(&rngStates[tid]);
     //printf("%f\n", rnd);
-    int binary = (rnd >> (rnd & 31)) & 1;
+    int binary = (rnd >> ((rnd ^ tid) & 31)) & 1;
     return 2 * binary - 1;
 }
 
 __global__ void initRNG(curandState * const rngStates,
         const unsigned int seed) {
-    unsigned int tid = blockIdx.x * SUM_BLOCK_SIZE + threadIdx.x;
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid < L3) {
         curand_init(seed, tid, 0, &rngStates[tid]);
     }

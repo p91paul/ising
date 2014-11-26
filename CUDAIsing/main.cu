@@ -30,11 +30,10 @@ public:
 
         CUDA_CHECK_RETURN(cudaMalloc(&rngStates, L3 * sizeof(curandState)));
 
-        initRNG<<<SUM_NUM_BLOCKS * 2, SUM_BLOCK_SIZE>>>(rngStates, seed);
+        initRNG<<<L, L * L>>>(rngStates, seed);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
-        fillMatrix<<<SUM_NUM_BLOCKS * 2, SUM_BLOCK_SIZE>>>(this->ptrS,
-                rngStates);
+        fillMatrix<<<L, L * L>>>(this->ptrS, rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
 
@@ -71,7 +70,8 @@ public:
 
     double getMagnet() {
         sum<int, SUM_BLOCK_SIZE, false> <<<SUM_NUM_BLOCKS, SUM_BLOCK_SIZE,
-                SUM_BLOCK_SIZE * sizeof(int)>>>((int *) ptrS, deviceSumPtr, L3);
+                SUM_SHARED_SIZE * sizeof(int)>>>((int *) ptrS, deviceSumPtr,
+                L3);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
         CUDA_CHECK_RETURN(
@@ -139,6 +139,6 @@ int main(int argc, char** argv) {
         //cout << magnet << endl;
     }
     cout << sum / N << endl;
-    cout << "Time for S.nextConfig(): " << nextTime << endl;
-    cout << "Time for S.getMagnet(): " << sumTime << endl;
+    cout << "Total time for S.nextConfig(): " << nextTime << endl;
+    cout << "Total time for S.getMagnet(): " << sumTime << endl;
 }

@@ -18,8 +18,10 @@ static const int BLOCK_SIZE_XY = L/BLOCKS_XY;
 static const int BLOCK_SIZE_Z = L / BLOCKS_Z / 2;
 
 
-static const int SUM_NUM_BLOCKS = 24;
-static const int SUM_BLOCK_SIZE = L3 / SUM_NUM_BLOCKS / 2;
+static const int SUM_NUM_BLOCKS = 4;
+// MUST be a power of 2 for the sum to work
+static const int SUM_BLOCK_SIZE = 256;
+static const int SUM_SHARED_SIZE = SUM_BLOCK_SIZE > 64 ? SUM_BLOCK_SIZE : 64;
 
 
 /**
