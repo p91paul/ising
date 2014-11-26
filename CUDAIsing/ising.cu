@@ -43,7 +43,7 @@ template<bool second> __global__ void generateNext(int* S, float beta,
     if (second)
         shifting = 1 - shifting;
 
-    index.z = (index.z << 1);
+    index.z <<= 1;
     int tid = getTid(index);
 
     //double z coordinate
@@ -74,6 +74,30 @@ template<bool second> __global__ void generateNext(int* S, float beta,
             + sS[sTid - sharedXY * sharedZ];
     int cellS = S[tid];
     int dE = 2 * cellS * nEnergy;
+    if (dE <= 0 || curand_uniform(&(rngStates[tid])) < expf(-beta * dE))
+        S[tid] = -cellS;
+}
+
+
+template<bool second> __global__ void generateNextGlobal(int* S, float beta,
+        curandState * const rngStates) {
+
+    dim3 index = getIndex();
+    //shifting to do inversions with the pattern of squares colours on a chess board
+    int shifting = (index.x ^ index.y) & 1;
+    if (second)
+        shifting = 1 - shifting;
+
+    index.z = (index.z << 1) | shifting;
+    int tid = getTid(index);
+
+    //printf("(%d,%d,%d)\n",index.x, index.y, index.z);
+    //printf("%d\n", sTid + sharedXY * sharedZ);
+    int nEnergy = S[neigh<'x',+1,L3,L,L>(tid)]+S[neigh<'x',-1,L3,L,L>(tid)]+
+            S[neigh<'y',+1,L3,L,L>(tid)]+S[neigh<'y',-1,L3,L,L>(tid)]+
+            S[neigh<'z',+1,L3,L,L>(tid)]+S[neigh<'z',-1,L3,L,L>(tid)];
+    int cellS = S[tid];
+    int dE = 2 * cellS * nEnergy;
     if (dE <= 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
         S[tid] = -cellS;
 }
@@ -82,6 +106,11 @@ template<bool second> __global__ void generateNext(int* S, float beta,
 template __global__ void generateNext<true>(int* S, float beta,
         curandState * const rngStates);
 template __global__ void generateNext<false>(int* S, float beta,
+        curandState * const rngStates);
+//global memory version
+template __global__ void generateNextGlobal<true>(int* S, float beta,
+        curandState * const rngStates);
+template __global__ void generateNextGlobal<false>(int* S, float beta,
         curandState * const rngStates);
 
 #include <stdio.h>

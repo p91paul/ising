@@ -52,10 +52,19 @@ public:
     }
 
     void nextConfig() {
-        generateNext<false><<<blocks, threads>>>(ptrS, beta, rngStates);
+        generateNext<false> <<<blocks, threads>>>(ptrS, beta, rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
-        generateNext<true><<<blocks, threads>>>(ptrS, beta, rngStates);
+        generateNext<true> <<<blocks, threads>>>(ptrS, beta, rngStates);
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
+        CUDA_CHECK_RETURN(cudaGetLastError());
+    }
+
+    void nextConfigGlobal() {
+        generateNextGlobal<false> <<<blocks, threads>>>(ptrS, beta, rngStates);
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
+        CUDA_CHECK_RETURN(cudaGetLastError());
+        generateNextGlobal<true> <<<blocks, threads>>>(ptrS, beta, rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
     }

@@ -9,6 +9,7 @@
 #define ISING_H_
 
 template<bool second> __global__ void generateNext(int* S, float beta, curandState * const rngStates);
+template<bool second> __global__ void generateNextGlobal(int* S, float beta, curandState * const rngStates);
 
 __global__ void print(int* S);
 __global__ void totalEnergy(int* S);
