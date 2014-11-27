@@ -2,7 +2,7 @@
 #include "common.h"
 #include "random.h"
 
-__device__ dim3 getIndex() {
+__device__   __forceinline__ dim3 getIndex() {
     dim3 index;
     index.x = blockIdx.x * BLOCK_SIZE_XY + threadIdx.x;
     index.y = blockIdx.y * BLOCK_SIZE_XY + threadIdx.y;
@@ -12,7 +12,7 @@ __device__ dim3 getIndex() {
 }
 
 template<int offsetX = L * L, int offsetY = L>
-__device__ unsigned int getTid(dim3 index) {
+__device__ __forceinline__ unsigned int getTid(dim3 index) {
     return index.x * offsetX + index.y * offsetY + index.z;
 }
 
@@ -124,11 +124,10 @@ __global__ void print(int* S) {
             }
 }
 
-__device__ int energy(int* S, int tid) {
-    int nEnergy = S[neigh<'x', 1, L3, L, L>(tid)]
-            + S[neigh<'x', -1, L3, L, L>(tid)] + S[neigh<'y', 1, L3, L, L>(tid)]
-            + S[neigh<'y', -1, L3, L, L>(tid)] + S[neigh<'z', 1, L3, L, L>(tid)]
-            + S[neigh<'z', -1, L3, L, L>(tid)];
+__device__ __forceinline__ int energy(int* S, int tid) {
+    int nEnergy = S[neigh<'x', 1>(tid)] + S[neigh<'x', -1>(tid)]
+            + S[neigh<'y', 1>(tid)] + S[neigh<'y', -1>(tid)]
+            + S[neigh<'z', 1>(tid)] + S[neigh<'z', -1>(tid)];
     return -S[tid] * nEnergy;
 
 }

@@ -1,11 +1,12 @@
+#include <stdio.h>
 #include "common.h"
 #include "random.h"
 
 
-__device__ int randomSpin(curandState * const rngStates, unsigned int tid) {
+__device__ __forceinline__ int randomSpin(curandState * const rngStates, unsigned int tid) {
     unsigned int rnd = curand(&rngStates[tid]);
-    //printf("%f\n", rnd);
     int binary = (rnd >> ((rnd ^ tid) & 31)) & 1;
+    //printf("%d\n", (binary << 1) - 1);
     return (binary << 1) - 1;
 }
 
