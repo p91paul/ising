@@ -12,17 +12,17 @@ static const int SEED = 5;
 
 static const int L = 24;
 static const int L3 = L * L * L;
-static const int BLOCKS_XY = 6;
-static const int BLOCKS_Z = 4;
-static const int BLOCK_SIZE_XY = L/BLOCKS_XY;
-static const int BLOCK_SIZE_Z = L / BLOCKS_Z / 2;
-
+static const int BLOCK_SIZE_X = 12;
+static const int BLOCK_SIZE_Y = 12;
+static const int BLOCK_SIZE_Z = 6;
+static const int BLOCKS_X = L/BLOCK_SIZE_X;
+static const int BLOCKS_Y = L/BLOCK_SIZE_Y;
+static const int BLOCKS_Z = L/BLOCK_SIZE_Z / 2;
 
 static const int SUM_NUM_BLOCKS = 4;
 // MUST be a power of 2 for the sum to work
 static const int SUM_BLOCK_SIZE = 256;
 static const int SUM_SHARED_SIZE = SUM_BLOCK_SIZE > 64 ? SUM_BLOCK_SIZE : 64;
-
 
 /**
  * This macro checks return value of the CUDA runtime call and exits

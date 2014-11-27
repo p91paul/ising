@@ -22,8 +22,8 @@ public:
         CUDA_CHECK_RETURN(cudaMalloc3D(&ptrS, extent));
         this->ptrS = (int*) ptrS.ptr;
 
-        blocks = dim3(BLOCKS_XY, BLOCKS_XY, BLOCKS_Z);
-        threads = dim3(BLOCK_SIZE_XY, BLOCK_SIZE_XY, BLOCK_SIZE_Z);
+        blocks = dim3(BLOCKS_X, BLOCKS_Y, BLOCKS_Z);
+        threads = dim3(BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_SIZE_Z);
 
         //cout<< blocks.x <<blocks.y << blocks.z <<endl;
         //cout << threads.x << threads.y << threads.z <<endl;
@@ -50,11 +50,24 @@ public:
         CUDA_CHECK_RETURN(cudaDeviceReset());
     }
 
-    void nextConfig() {
-        generateNext<false> <<<blocks, threads>>>(ptrS, beta, rngStates);
+    void nextConfigAllShared() {
+        generateNextAllShared<false> <<<blocks, threads>>>(ptrS, beta,
+                rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
-        generateNext<true> <<<blocks, threads>>>(ptrS, beta, rngStates);
+        generateNextAllShared<true> <<<blocks, threads>>>(ptrS, beta,
+                rngStates);
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
+        CUDA_CHECK_RETURN(cudaGetLastError());
+    }
+
+    void nextConfigPartlyShared() {
+        generateNextPartlyShared<false> <<<blocks, threads>>>(ptrS, beta,
+                rngStates);
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
+        CUDA_CHECK_RETURN(cudaGetLastError());
+        generateNextPartlyShared<true> <<<blocks, threads>>>(ptrS, beta,
+                rngStates);
         CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
     }
@@ -118,13 +131,17 @@ int main(int argc, char** argv) {
         T = atof(argv[1]);
     if (argc >= 3)
         N = atoi(argv[2]);
-    Configuration S(T, SEED);
     double sum = 0;
     struct timeval t1, t2;
+    gettimeofday(&t1, NULL);
+    Configuration S(T, SEED);
+    gettimeofday(&t2, NULL);
+    double setupTime = (t2.tv_sec - t1.tv_sec) * 1000.0
+            + (t2.tv_usec - t1.tv_usec) / 1000.0;
     double nextTime = 0, sumTime = 0;
     for (int i = 0; i < N; i++) {
         gettimeofday(&t1, NULL);
-        S.nextConfig();
+        S.nextConfigGlobal();
         gettimeofday(&t2, NULL);
         nextTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
         nextTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
@@ -138,6 +155,7 @@ int main(int argc, char** argv) {
         //S.printMatrix(i); S.printEnergy(i); cout << magnet << endl;
     }
     cout << sum / N << endl;
+    cout << "Setup time: " << setupTime << endl;
     cout << "Total time for S.nextConfig(): " << nextTime << endl;
     cout << "Total time for S.getMagnet(): " << sumTime << endl;
 }
