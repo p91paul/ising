@@ -23,15 +23,25 @@ static const int offsetY = sharedZ;
 static const int sharedSize = sharedXY * sharedXY * sharedZ;
 static const int pos000 = sharedXY * sharedZ + sharedZ + 1;
 
-template<char dir, int skip, int size = sharedSize, int sizeXY = sharedXY,
-        int sizeZ = sharedZ>
-__device__ int neigh(int tid) {
+template<char dir, int skip, int sizeXY = sharedXY, int sizeZ = sharedZ>
+__device__ __forceinline__ int unsafeNeigh(int tid) {
     if (dir == 'x')
-        return (size + tid + skip * sizeXY * sizeZ) % size;
-    if (dir == 'y')
-        return (size + tid + skip * sizeZ) % size;
-    if (dir == 'z')
-        return (size + tid + skip) % size;
+        return tid + skip * sizeXY * sizeZ;
+    else if (dir == 'y')
+        return tid + skip * sizeZ;
+    else
+        return tid + skip;
+}
+
+template<char dir, int skip, int size = L3, int sizeXY = L, int sizeZ = L>
+__device__ __forceinline__ int neigh(int tid) {
+    int neigh = unsafeNeigh<dir, skip, sizeXY, sizeZ>(tid);
+    // this conditional statement is faster than (size+neigh) % size
+    if (neigh < 0)
+        return neigh + size;
+    else if (neigh >= size)
+        return neigh - size;
+    return neigh;
 }
 
 template<bool second> __global__ void generateNext(int* S, float beta,
@@ -54,30 +64,30 @@ template<bool second> __global__ void generateNext(int* S, float beta,
     sTid += shifting;
     tid += shifting;
     if (threadIdx.x == 0)
-        sS[neigh<'x', -1>(sTid)] = S[neigh<'x', -1, L3, L, L>(tid)];
+        sS[unsafeNeigh<'x', -1>(sTid)] = S[neigh<'x', -1>(tid)];
     if (threadIdx.y == 0)
-        sS[neigh<'y', -1>(sTid)] = S[neigh<'y', -1, L3, L, L>(tid)];
+        sS[unsafeNeigh<'y', -1>(sTid)] = S[neigh<'y', -1>(tid)];
     if (!shifting && threadIdx.z == 0)
-        sS[neigh<'z', -1>(sTid)] = S[neigh<'z', -1, L3, L, L>(tid)];
+        sS[unsafeNeigh<'z', -1>(sTid)] = S[neigh<'z', -1>(tid)];
     if (threadIdx.x == BLOCK_SIZE_XY - 1)
-        sS[neigh<'x', +1>(sTid)] = S[neigh<'x', +1, L3, L, L>(tid)];
+        sS[unsafeNeigh<'x', +1>(sTid)] = S[neigh<'x', +1>(tid)];
     if (threadIdx.y == BLOCK_SIZE_XY - 1)
-        sS[neigh<'y', +1>(sTid)] = S[neigh<'y', +1, L3, L, L>(tid)];
+        sS[unsafeNeigh<'y', +1>(sTid)] = S[neigh<'y', +1>(tid)];
     if (shifting && threadIdx.z == BLOCK_SIZE_Z - 1)
-        sS[neigh<'z', +1>(sTid)] = S[neigh<'z', +1, L3, L, L>(tid)];
+        sS[unsafeNeigh<'z', +1>(sTid)] = S[neigh<'z', +1>(tid)];
     __syncthreads();
 
     //printf("(%d,%d,%d)\n",index.x, index.y, index.z);
     //printf("%d\n", sTid + sharedXY * sharedZ);
-    int nEnergy = sS[sTid + 1] + sS[sTid - 1] + sS[sTid + sharedZ]
-            + sS[sTid - sharedZ] + sS[sTid + sharedXY * sharedZ]
-            + sS[sTid - sharedXY * sharedZ];
+    int nEnergy = sS[unsafeNeigh<'x', -1>(sTid)]
+            + sS[unsafeNeigh<'x', +1>(sTid)] + sS[unsafeNeigh<'y', -1>(sTid)]
+            + sS[unsafeNeigh<'y', +1>(sTid)] + sS[unsafeNeigh<'z', -1>(sTid)]
+            + sS[unsafeNeigh<'z', +1>(sTid)];
     int cellS = S[tid];
     int dE = 2 * cellS * nEnergy;
     if (dE <= 0 || curand_uniform(&(rngStates[tid])) < expf(-beta * dE))
         S[tid] = -cellS;
 }
-
 
 template<bool second> __global__ void generateNextGlobal(int* S, float beta,
         curandState * const rngStates) {
@@ -93,9 +103,9 @@ template<bool second> __global__ void generateNextGlobal(int* S, float beta,
 
     //printf("(%d,%d,%d)\n",index.x, index.y, index.z);
     //printf("%d\n", sTid + sharedXY * sharedZ);
-    int nEnergy = S[neigh<'x',+1,L3,L,L>(tid)]+S[neigh<'x',-1,L3,L,L>(tid)]+
-            S[neigh<'y',+1,L3,L,L>(tid)]+S[neigh<'y',-1,L3,L,L>(tid)]+
-            S[neigh<'z',+1,L3,L,L>(tid)]+S[neigh<'z',-1,L3,L,L>(tid)];
+    int nEnergy = S[neigh<'x', +1>(tid)] + S[neigh<'x', -1>(tid)]
+            + S[neigh<'y', +1>(tid)] + S[neigh<'y', -1>(tid)]
+            + S[neigh<'z', +1>(tid)] + S[neigh<'z', -1>(tid)];
     int cellS = S[tid];
     int dE = 2 * cellS * nEnergy;
     if (dE <= 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
