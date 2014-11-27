@@ -6,7 +6,7 @@ __device__ int randomSpin(curandState * const rngStates, unsigned int tid) {
     unsigned int rnd = curand(&rngStates[tid]);
     //printf("%f\n", rnd);
     int binary = (rnd >> ((rnd ^ tid) & 31)) & 1;
-    return 2 * binary - 1;
+    return (binary << 1) - 1;
 }
 
 __global__ void initRNG(curandState * const rngStates,
