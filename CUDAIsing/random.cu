@@ -3,7 +3,7 @@
 
 
 __device__ int randomSpin(curandState * const rngStates, unsigned int tid) {
-    int rnd = curand(&rngStates[tid]);
+    unsigned int rnd = curand(&rngStates[tid]);
     //printf("%f\n", rnd);
     int binary = (rnd >> ((rnd ^ tid) & 31)) & 1;
     return 2 * binary - 1;
