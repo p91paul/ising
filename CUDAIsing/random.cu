@@ -18,7 +18,7 @@ __global__ void initRNG(curandState * const rngStates,
 }
 
 __global__ void fillMatrix(int* S, curandState * const rngStates) {
-    unsigned int tid = blockIdx.x * SUM_BLOCK_SIZE + threadIdx.x;
+    unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid < L3) {
         //skipahead(100, &rngStates[tid]);
         S[tid] = randomSpin(rngStates, tid);
