@@ -128,15 +128,14 @@ int main(int argc, char** argv) {
         gettimeofday(&t2, NULL);
         nextTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
         nextTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
-        //S.printMatrix(i);
         gettimeofday(&t1, NULL);
         double magnet = S.getMagnet();
         gettimeofday(&t2, NULL);
         sumTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
         sumTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
         sum += magnet;
-        //S.printEnergy(i);
-        //cout << magnet << endl;
+
+        //S.printMatrix(i); S.printEnergy(i); cout << magnet << endl;
     }
     cout << sum / N << endl;
     cout << "Total time for S.nextConfig(): " << nextTime << endl;
