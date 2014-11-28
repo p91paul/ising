@@ -12,9 +12,9 @@ static const int SEED = 5;
 
 static const int L = 24;
 static const int L3 = L * L * L;
-static const int BLOCK_SIZE_X = 12;
-static const int BLOCK_SIZE_Y = 12;
-static const int BLOCK_SIZE_Z = 6;
+static const int BLOCK_SIZE_X = 1;
+static const int BLOCK_SIZE_Y = 4;
+static const int BLOCK_SIZE_Z = 12;
 static const int BLOCKS_X = L/BLOCK_SIZE_X;
 static const int BLOCKS_Y = L/BLOCK_SIZE_Y;
 static const int BLOCKS_Z = L/BLOCK_SIZE_Z / 2;

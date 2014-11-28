@@ -43,6 +43,7 @@ __device__ __forceinline__ int unsafeNeigh(int tid) {
 template<char dir, int skip, int size = L3, int sizeY = L, int sizeZ = L>
 __device__ __forceinline__ int neigh(int tid) {
     int neigh = unsafeNeigh<dir, skip, sizeY, sizeZ>(tid);
+    //return (size+neigh) % size;
     // this conditional statement is faster than (size+neigh) % size
     if (neigh < 0)
         return neigh + size;
@@ -70,6 +71,7 @@ template<bool second> __global__ void generateNextAllShared(int* S, float beta,
     sS[sTid + (1 - shifting)] = S[tid + (1 - shifting)];
     sTid += shifting;
     tid += shifting;
+    int cellS = S[tid];
     if (threadIdx.x == 0)
         sS[unsafeNeigh<'x', -1>(sTid)] = S[neigh<'x', -1>(tid)];
     if (threadIdx.y == 0)
@@ -90,7 +92,6 @@ template<bool second> __global__ void generateNextAllShared(int* S, float beta,
             + sS[unsafeNeigh<'x', +1>(sTid)] + sS[unsafeNeigh<'y', -1>(sTid)]
             + sS[unsafeNeigh<'y', +1>(sTid)] + sS[unsafeNeigh<'z', -1>(sTid)]
             + sS[unsafeNeigh<'z', +1>(sTid)];
-    int cellS = S[tid];
     int dE = 2 * cellS * nEnergy;
     if (dE <= 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
         S[tid] = -cellS;
@@ -119,6 +120,7 @@ template<bool second> __global__ void generateNextPartlyShared(int* S,
 
     //printf("(%d,%d,%d)\n",index.x, index.y, index.z);
     //printf("%d\n", sTid + sharedXY * sharedZ);
+    int cellS = S[tid];
     int left =
             threadIdx.x == 0 ?
                     S[neigh<'x', -1>(tid)] :
@@ -144,7 +146,6 @@ template<bool second> __global__ void generateNextPartlyShared(int* S,
                     S[neigh<'z', +1>(tid)] :
                     sS[unsafeNeigh<'z', +1, pSharedY, pSharedZ>(sTid)];
     int nEnergy = left + right + down + up + back + front;
-    int cellS = S[tid];
     int dE = 2 * cellS * nEnergy;
     if (dE <= 0 || curand_uniform(&(rngStates[tid])) < __expf(-beta * dE))
         S[tid] = -cellS;

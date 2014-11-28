@@ -31,17 +31,16 @@ public:
         CUDA_CHECK_RETURN(cudaMalloc(&rngStates, L3 * sizeof(curandState)));
 
         initRNG<<<L, L * L>>>(rngStates, seed);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         fillMatrix<<<L, L * L>>>(this->ptrS, rngStates);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
 
         CUDA_CHECK_RETURN(
                 cudaMalloc(&deviceSumPtr, sizeof(int) * SUM_NUM_BLOCKS));
     }
 
     ~Configuration() {
+        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(cudaGetLastError());
 
         CUDA_CHECK_RETURN(cudaFree(rngStates));
@@ -53,44 +52,36 @@ public:
     void nextConfigAllShared() {
         generateNextAllShared<false> <<<blocks, threads>>>(ptrS, beta,
                 rngStates);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         generateNextAllShared<true> <<<blocks, threads>>>(ptrS, beta,
                 rngStates);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
     }
 
     void nextConfigPartlyShared() {
         generateNextPartlyShared<false> <<<blocks, threads>>>(ptrS, beta,
                 rngStates);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         generateNextPartlyShared<true> <<<blocks, threads>>>(ptrS, beta,
                 rngStates);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
     }
 
     void nextConfigGlobal() {
         generateNextGlobal<false> <<<blocks, threads>>>(ptrS, beta, rngStates);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         generateNextGlobal<true> <<<blocks, threads>>>(ptrS, beta, rngStates);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
     }
 
     double getMagnet() {
         sum<int, SUM_BLOCK_SIZE, false> <<<SUM_NUM_BLOCKS, SUM_BLOCK_SIZE,
                 SUM_SHARED_SIZE * sizeof(int)>>>((int *) ptrS, deviceSumPtr,
                 L3);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         CUDA_CHECK_RETURN(
                 cudaMemcpy(hostSumPtr, deviceSumPtr,
                         sizeof(int) * SUM_NUM_BLOCKS, cudaMemcpyDeviceToHost));
-        CUDA_CHECK_RETURN(cudaGetLastError());
         double result = 0;
         for (int i = 0; i < SUM_NUM_BLOCKS; ++i) {
             result += hostSumPtr[i];
@@ -101,15 +92,13 @@ public:
     void printMatrix(int i) {
         cout << "iteration " << i << endl;
         print<<<1, 1>>>(ptrS);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
     }
 
     void printEnergy(int i) {
         cout << "iteration " << i << ": ";
         totalEnergy<<<1, 1>>>(ptrS);
-        CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-        CUDA_CHECK_RETURN(cudaGetLastError());
+        //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
     }
 
 private:
@@ -138,24 +127,24 @@ int main(int argc, char** argv) {
     gettimeofday(&t2, NULL);
     double setupTime = (t2.tv_sec - t1.tv_sec) * 1000.0
             + (t2.tv_usec - t1.tv_usec) / 1000.0;
-    double nextTime = 0, sumTime = 0;
+    double iterTime = 0;
     for (int i = 0; i < N; i++) {
         gettimeofday(&t1, NULL);
         S.nextConfigGlobal();
-        gettimeofday(&t2, NULL);
+        /*gettimeofday(&t2, NULL);
         nextTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
         nextTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
-        gettimeofday(&t1, NULL);
+        gettimeofday(&t1, NULL);*/
         double magnet = S.getMagnet();
         gettimeofday(&t2, NULL);
-        sumTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
-        sumTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
+        iterTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
+        iterTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
         sum += magnet;
 
         //S.printMatrix(i); S.printEnergy(i); cout << magnet << endl;
     }
     cout << sum / N << endl;
     cout << "Setup time: " << setupTime << endl;
-    cout << "Total time for S.nextConfig(): " << nextTime << endl;
-    cout << "Total time for S.getMagnet(): " << sumTime << endl;
+    cout << "Total time for iterations: " << iterTime << endl;
+    //cout << "Total time for S.getMagnet(): " << sumTime << endl;
 }
