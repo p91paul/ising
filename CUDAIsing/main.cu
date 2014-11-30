@@ -29,14 +29,13 @@ public:
         //cout << threads.x << threads.y << threads.z <<endl;
 
         CUDA_CHECK_RETURN(cudaMalloc(&rngStates, L3 * sizeof(curandState)));
+        CUDA_CHECK_RETURN(
+                cudaMalloc(&deviceSumPtr, sizeof(int) * SUM_NUM_BLOCKS));
 
         initRNG<<<L, L * L>>>(rngStates, seed);
         //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
         fillMatrix<<<L, L * L>>>(this->ptrS, rngStates);
         //CUDA_CHECK_RETURN(cudaDeviceSynchronize()); // Wait for the GPU launched work to complete
-
-        CUDA_CHECK_RETURN(
-                cudaMalloc(&deviceSumPtr, sizeof(int) * SUM_NUM_BLOCKS));
     }
 
     ~Configuration() {
@@ -130,7 +129,7 @@ int main(int argc, char** argv) {
     double iterTime = 0;
     for (int i = 0; i < N; i++) {
         gettimeofday(&t1, NULL);
-        S.nextConfigGlobal();
+        S.nextConfigPartlyShared();
         /*gettimeofday(&t2, NULL);
         nextTime += (t2.tv_sec - t1.tv_sec) * 1000.0; // sec to ms
         nextTime += (t2.tv_usec - t1.tv_usec) / 1000.0; // us to ms
