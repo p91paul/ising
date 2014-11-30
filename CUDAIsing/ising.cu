@@ -2,7 +2,7 @@
 #include "common.h"
 #include "random.h"
 
-__device__              __forceinline__ dim3 getIndex() {
+__forceinline__ __device__ dim3 getIndex() {
     dim3 index;
     index.x = blockIdx.x * BLOCK_SIZE_X + threadIdx.x;
     index.y = blockIdx.y * BLOCK_SIZE_Y + threadIdx.y;
@@ -74,42 +74,23 @@ template<bool second> __global__ void generateNextAllShared(int* S, float beta,
     tid += shifting;
     int cellS = S[tid];
 
-    /* using striped layout we may take advantage of elements already copied;
-     * compiler will remove checks on const
-     * We will have stripes filling only z or y dimension; for memory
-     * layout reasons filling x dimension is inefficient */
-    if (BLOCK_SIZE_Y == L || BLOCK_SIZE_Z * 2 == L)
-        __syncthreads();
-
     if (threadIdx.x == 0)
         sS[unsafeNeigh<'x', -1>(sTid)] = S[neigh<'x', -1>(tid)];
 
     if (threadIdx.y == 0)
-        if (BLOCK_SIZE_Y == L)
-            sS[unsafeNeigh<'y', -1>(sTid)] = sS[unsafeNeigh<'y', L - 1>(sTid)];
-        else
-            sS[unsafeNeigh<'y', -1>(sTid)] = S[neigh<'y', -1>(tid)];
+        sS[unsafeNeigh<'y', -1>(sTid)] = S[neigh<'y', -1>(tid)];
 
     if (!shifting && threadIdx.z == 0)
-        if (BLOCK_SIZE_Z * 2 == L)
-            sS[unsafeNeigh<'z', -1>(sTid)] = sS[unsafeNeigh<'z', L - 1>(sTid)];
-        else
-            sS[unsafeNeigh<'z', -1>(sTid)] = S[neigh<'z', -1>(tid)];
+        sS[unsafeNeigh<'z', -1>(sTid)] = S[neigh<'z', -1>(tid)];
 
     if (threadIdx.x == BLOCK_SIZE_X - 1)
         sS[unsafeNeigh<'x', +1>(sTid)] = S[neigh<'x', +1>(tid)];
 
     if (threadIdx.y == BLOCK_SIZE_Y - 1)
-        if (BLOCK_SIZE_Y == L)
-            sS[unsafeNeigh<'y', +1>(sTid)] = sS[unsafeNeigh<'y', 1 - L>(sTid)];
-        else
-            sS[unsafeNeigh<'y', +1>(sTid)] = S[neigh<'y', +1>(tid)];
+        sS[unsafeNeigh<'y', +1>(sTid)] = S[neigh<'y', +1>(tid)];
 
     if (shifting && threadIdx.z == BLOCK_SIZE_Z - 1)
-        if (BLOCK_SIZE_Z * 2 == L && shifting)
-            sS[unsafeNeigh<'z', +1>(sTid)] = sS[unsafeNeigh<'z', 1 - L>(sTid)];
-        else
-            sS[unsafeNeigh<'z', +1>(sTid)] = S[neigh<'z', +1>(tid)];
+        sS[unsafeNeigh<'z', +1>(sTid)] = S[neigh<'z', +1>(tid)];
     __syncthreads();
 
     //printf("(%d,%d,%d)\n",index.x, index.y, index.z);
